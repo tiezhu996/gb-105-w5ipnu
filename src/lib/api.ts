@@ -46,6 +46,22 @@ export const orderAPI = {
   getOrder: (id: number) => api.get(`/orders/${id}`),
   shipOrder: (id: number) => api.put(`/orders/${id}/ship`),
   receiveOrder: (id: number) => api.put(`/orders/${id}/receive`),
+  cancelOrder: (id: number) => api.put(`/orders/${id}/cancel`),
+}
+
+export const exchangeAPI = {
+  createOffer: (data: {
+    target_product_id: number
+    offered_product_id: number
+  }) => api.post('/exchanges', data),
+  getReceivedOffers: () => api.get('/exchanges/received'),
+  getMyOffers: (target_product_id?: number) =>
+    api.get('/exchanges/mine', {
+      params: target_product_id ? { target_product_id } : undefined,
+    }),
+  acceptOffer: (id: number) => api.put(`/exchanges/${id}/accept`),
+  rejectOffer: (id: number) => api.put(`/exchanges/${id}/reject`),
+  cancelOffer: (id: number) => api.put(`/exchanges/${id}/cancel`),
 }
 
 export const reviewAPI = {
