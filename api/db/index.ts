@@ -54,6 +54,23 @@ export function initDB() {
       FOREIGN KEY (seller_id) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS exchange_offers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      target_product_id INTEGER NOT NULL,
+      offered_product_id INTEGER NOT NULL,
+      requester_id INTEGER NOT NULL,
+      seller_id INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending',
+      requester_confirmed INTEGER DEFAULT 0,
+      seller_confirmed INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (target_product_id) REFERENCES products(id),
+      FOREIGN KEY (offered_product_id) REFERENCES products(id),
+      FOREIGN KEY (requester_id) REFERENCES users(id),
+      FOREIGN KEY (seller_id) REFERENCES users(id)
+    );
+
     CREATE TABLE IF NOT EXISTS reviews (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER NOT NULL,
@@ -71,6 +88,10 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS idx_products_character ON products(character_name);
     CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
     CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+    CREATE INDEX IF NOT EXISTS idx_exchange_offers_target ON exchange_offers(target_product_id);
+    CREATE INDEX IF NOT EXISTS idx_exchange_offers_offered ON exchange_offers(offered_product_id);
+    CREATE INDEX IF NOT EXISTS idx_exchange_offers_requester ON exchange_offers(requester_id, status);
+    CREATE INDEX IF NOT EXISTS idx_exchange_offers_seller ON exchange_offers(seller_id, status);
   `)
 }
 

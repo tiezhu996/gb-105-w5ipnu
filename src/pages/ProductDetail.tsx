@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { productAPI, orderAPI } from '../lib/api'
+import { productAPI, orderAPI, exchangeAPI } from '../lib/api'
 import { useAuthStore } from '../store/auth'
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   Tag,
   Package,
   Info,
+  X,
 } from 'lucide-react'
 
 const conditionMap: Record<string, string> = {
@@ -39,7 +40,13 @@ export default function ProductDetail() {
   const [currentPhoto, setCurrentPhoto] = useState(0)
   const [loading, setLoading] = useState(true)
   const [buying, setBuying] = useState(false)
-  const { isAuthenticated } = useAuthStore()
+  const [showExchangeModal, setShowExchangeModal] = useState(false)
+  const [myProducts, setMyProducts] = useState<any[]>([])
+  const [loadingMyProducts, setLoadingMyProducts] = useState(false)
+  const [selectedOfferedId, setSelectedOfferedId] = useState<number | null>(null)
+  const [submittingExchange, setSubmittingExchange] = useState(false)
+  const [exchangeError, setExchangeError] = useState('')
+  const { isAuthenticated, user } = useAuthStore()
 
   useEffect(() => {
     loadProduct()
@@ -57,7 +64,7 @@ export default function ProductDetail() {
     }
   }
 
-  const handleBuy = async (type: 'buy' | 'exchange') => {
+  const handleBuy = async () => {
     if (!isAuthenticated) {
       navigate('/login')
       return
@@ -67,15 +74,61 @@ export default function ProductDetail() {
     try {
       await orderAPI.createOrder({
         product_id: parseInt(id!),
-        type,
+        type: 'buy',
         price: product.price,
       })
-      alert(type === 'buy' ? '下单成功！请在订单管理中查看' : '交换请求已发送！')
+      alert('下单成功！请在订单管理中查看')
       navigate('/profile')
     } catch (error: any) {
       alert(error.response?.data?.error || '操作失败')
     } finally {
       setBuying(false)
+    }
+  }
+
+  const openExchangeModal = async () => {
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
+    setShowExchangeModal(true)
+    setSelectedOfferedId(null)
+    setExchangeError('')
+    setLoadingMyProducts(true)
+    try {
+      const res = await productAPI.getMyProducts()
+      setMyProducts(
+        (res.data.data || []).filter((p: any) => p.status === 'active'),
+      )
+    } catch (error: any) {
+      setExchangeError(
+        error.response?.data?.error || '加载我的商品失败，请稍后重试',
+      )
+    } finally {
+      setLoadingMyProducts(false)
+    }
+  }
+
+  const handleSubmitExchange = async () => {
+    if (!selectedOfferedId) {
+      setExchangeError('请选择一件用于交换的商品')
+      return
+    }
+
+    setSubmittingExchange(true)
+    setExchangeError('')
+    try {
+      const res = await exchangeAPI.create({
+        target_product_id: parseInt(id!),
+        offered_product_id: selectedOfferedId,
+      })
+      alert(res.data?.message || '交换报价已发送！')
+      setShowExchangeModal(false)
+      navigate('/profile')
+    } catch (error: any) {
+      setExchangeError(error.response?.data?.error || '发起交换失败，请稍后重试')
+    } finally {
+      setSubmittingExchange(false)
     }
   }
 
@@ -237,24 +290,131 @@ export default function ProductDetail() {
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3">
         <div className="max-w-4xl mx-auto flex gap-3">
-          <button
-            onClick={() => handleBuy('exchange')}
-            disabled={buying}
-            className="flex-1 py-3.5 bg-pink-50 text-pink-600 rounded-xl font-medium hover:bg-pink-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <RefreshCw className="w-5 h-5" />
-            想要交换
-          </button>
-          <button
-            onClick={() => handleBuy('buy')}
-            disabled={buying}
-            className="flex-1 py-3.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <ShoppingCart className="w-5 h-5" />
-            立即购买
-          </button>
+          {user && product.seller_id === user.id ? (
+            <div className="flex-1 py-3.5 bg-gray-100 text-gray-500 rounded-xl font-medium text-center">
+              这是我发布的商品
+            </div>
+          ) : product.status !== 'active' ? (
+            <div className="flex-1 py-3.5 bg-gray-100 text-gray-500 rounded-xl font-medium text-center">
+              {product.status === 'trading' ? '商品交易中，暂不可操作' : '商品已售出'}
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={openExchangeModal}
+                disabled={buying}
+                className="flex-1 py-3.5 bg-pink-50 text-pink-600 rounded-xl font-medium hover:bg-pink-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-5 h-5" />
+                想要交换
+              </button>
+              <button
+                onClick={handleBuy}
+                disabled={buying}
+                className="flex-1 py-3.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                立即购买
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {showExchangeModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900">选择用于交换的商品</h3>
+              <button
+                onClick={() => setShowExchangeModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingMyProducts ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 animate-pulse">
+                      <div className="w-16 h-16 bg-gray-200 rounded-xl" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4" />
+                        <div className="h-4 bg-gray-200 rounded w-1/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : myProducts.length === 0 ? (
+                <div className="text-center py-10">
+                  <Package className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-3">
+                    你还没有在售的商品，无法发起交换
+                  </p>
+                  <Link
+                    to="/publish"
+                    className="text-purple-500 hover:underline font-medium"
+                  >
+                    去发布一件闲置
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {myProducts.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedOfferedId(p.id)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                        selectedOfferedId === p.id
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-100 hover:border-gray-200'
+                      }`}
+                    >
+                      <img
+                        src={p.photos?.[0] || 'https://picsum.photos/200/200'}
+                        alt={p.name}
+                        className="w-16 h-16 rounded-xl object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{p.name}</p>
+                        <p className="text-purple-600 font-semibold text-sm mt-0.5">
+                          ¥{p.price}
+                        </p>
+                      </div>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          selectedOfferedId === p.id
+                            ? 'border-purple-500 bg-purple-500'
+                            : 'border-gray-300'
+                        }`}
+                      >
+                        {selectedOfferedId === p.id && (
+                          <div className="w-2 h-2 bg-white rounded-full" />
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-100">
+              {exchangeError && (
+                <p className="text-red-500 text-sm mb-3 text-center">{exchangeError}</p>
+              )}
+              <button
+                onClick={handleSubmitExchange}
+                disabled={submittingExchange || loadingMyProducts || myProducts.length === 0}
+                className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:opacity-90 transition-all disabled:opacity-50"
+              >
+                {submittingExchange ? '提交中...' : '确认发起交换'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

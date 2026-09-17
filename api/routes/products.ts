@@ -190,6 +190,11 @@ router.put(
         return
       }
 
+      if (product.status === 'trading') {
+        res.status(400).json({ success: false, error: '商品正在交换中，无法修改状态' })
+        return
+      }
+
       db.prepare('UPDATE products SET status = ? WHERE id = ?').run(status, id)
 
       res.json({ success: true, message: '状态更新成功' })

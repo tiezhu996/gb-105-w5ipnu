@@ -48,6 +48,17 @@ export const orderAPI = {
   receiveOrder: (id: number) => api.put(`/orders/${id}/receive`),
 }
 
+export const exchangeAPI = {
+  create: (data: { target_product_id: number; offered_product_id: number }) =>
+    api.post('/exchanges', data),
+  getReceived: () => api.get('/exchanges/received'),
+  getSent: () => api.get('/exchanges/sent'),
+  accept: (id: number) => api.put(`/exchanges/${id}/accept`),
+  reject: (id: number) => api.put(`/exchanges/${id}/reject`),
+  cancel: (id: number) => api.put(`/exchanges/${id}/cancel`),
+  confirm: (id: number) => api.put(`/exchanges/${id}/confirm`),
+}
+
 export const reviewAPI = {
   createReview: (data: {
     order_id: number

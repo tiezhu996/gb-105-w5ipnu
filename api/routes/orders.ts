@@ -30,29 +30,41 @@ router.post(
         return
       }
 
-      const result = db
-        .prepare(
-          `
-        INSERT INTO orders (product_id, buyer_id, seller_id, price, type, status)
-        VALUES (?, ?, ?, ?, ?, 'pending')
-      `,
-        )
-        .run(
+      const createOrder = db.transaction(() => {
+        const result = db
+          .prepare(
+            `
+          INSERT INTO orders (product_id, buyer_id, seller_id, price, type, status)
+          VALUES (?, ?, ?, ?, ?, 'pending')
+        `,
+          )
+          .run(
+            product_id,
+            req.user?.id,
+            product.seller_id,
+            price || product.price,
+            type,
+          )
+
+        db.prepare('UPDATE products SET status = ? WHERE id = ?').run(
+          'sold',
           product_id,
-          req.user?.id,
-          product.seller_id,
-          price || product.price,
-          type,
         )
 
-      db.prepare('UPDATE products SET status = ? WHERE id = ?').run(
-        'sold',
-        product_id,
-      )
+        // 商品被买走后，涉及它的待处理交换报价自动失效
+        db.prepare(
+          `UPDATE exchange_offers SET status = 'invalid', updated_at = CURRENT_TIMESTAMP
+           WHERE status = 'pending' AND (target_product_id = ? OR offered_product_id = ?)`,
+        ).run(product_id, product_id)
+
+        return result.lastInsertRowid
+      })
+
+      const orderId = createOrder()
 
       const order = db
         .prepare('SELECT * FROM orders WHERE id = ?')
-        .get(result.lastInsertRowid)
+        .get(orderId)
 
       res.status(201).json({ success: true, data: order })
     } catch (error) {
